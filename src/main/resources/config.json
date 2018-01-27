@@ -1,0 +1,16 @@
+{
+	"web.http.port": 7070,
+	"redis": {
+		"host": "172.16.10.71",
+		"port": 6379
+	},
+	"vertx.blockedThreadCheckInterval": 200000000,
+	"vertx.cluster": {
+		"zk.hosts": "localhost",
+		"zk.root.path": "vertx/mesh",
+		"zk.retry": {
+			"initialSleepTime": 1000,
+			"maxTimes": 3
+		}
+	}
+}
