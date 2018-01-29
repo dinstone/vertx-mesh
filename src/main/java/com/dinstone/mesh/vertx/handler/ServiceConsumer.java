@@ -44,8 +44,8 @@ public class ServiceConsumer {
             return;
         }
 
-        LOG.info("invoke servcie: {} {} http://{}:{}{}", request.getService(), request.getMethod(), record.getHost(),
-            record.getPort(), request.getPath());
+        LOG.info("invoke servcie: {} http://{}{} on {}:{}", request.getMethod(), request.getService(),
+            request.getPath(), record.getHost(), record.getPort());
         httpClient.request(HttpMethod.valueOf(request.getMethod()), record.getPort(), record.getHost(),
             request.getPath(), res -> {
                 res.bodyHandler(buffer -> {

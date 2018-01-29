@@ -6,12 +6,15 @@ import java.io.IOException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.dinstone.mesh.vertx.verticle.HttpServerVerticle;
+import com.dinstone.mesh.vertx.verticle.HttpAdminVerticle;
+import com.dinstone.mesh.vertx.verticle.HttpApiVerticle;
+import com.dinstone.mesh.vertx.verticle.HttpProxyVerticle;
 import com.dinstone.mesh.vertx.verticle.MeshVerticleFactory;
 
 import io.vertx.core.DeploymentOptions;
 import io.vertx.core.Vertx;
 import io.vertx.core.VertxOptions;
+import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.core.spi.cluster.ClusterManager;
 import io.vertx.spi.cluster.zookeeper.ZookeeperClusterManager;
@@ -64,27 +67,58 @@ public class ApplicationActivator {
         // init verticle
         MeshVerticleFactory factory = new MeshVerticleFactory(vertx, config);
 
-        // deploy verticle
-        int instances = Runtime.getRuntime().availableProcessors();
-        DeploymentOptions hvOptions = new DeploymentOptions().setConfig(config).setInstances(instances);
-        VertxHelper.deployVerticle(vertx, hvOptions, factory, factory.verticleName(HttpServerVerticle.class));
+        // deploy admin verticle
+        JsonObject adminConfig = config.getJsonObject("admin");
+        DeploymentOptions options = new DeploymentOptions().setConfig(adminConfig);
+        VertxHelper.deployVerticle(vertx, options, factory, factory.verticleName(HttpAdminVerticle.class));
+
+        // deploy router verticle
+        JsonArray listenArray = config.getJsonArray("routers");
+        if (listenArray == null || listenArray.isEmpty()) {
+            throw new RuntimeException("routers config is empty");
+        }
+
+        for (Object object : listenArray) {
+            JsonObject listenConfig = (JsonObject) object;
+            String type = listenConfig.getString("label");
+            String protocol = listenConfig.getString("protocol");
+            if ("http".equalsIgnoreCase(protocol) && "api".equalsIgnoreCase(type)) {
+                int instances = Runtime.getRuntime().availableProcessors();
+                options = new DeploymentOptions().setConfig(listenConfig).setInstances(instances);
+                VertxHelper.deployVerticle(vertx, options, factory, factory.verticleName(HttpApiVerticle.class));
+            } else if ("http".equalsIgnoreCase(protocol) && "proxy".equalsIgnoreCase(type)) {
+                int instances = Runtime.getRuntime().availableProcessors();
+                options = new DeploymentOptions().setConfig(listenConfig).setInstances(instances);
+                VertxHelper.deployVerticle(vertx, options, factory, factory.verticleName(HttpProxyVerticle.class));
+            } else {
+                LOG.warn("unkown listen service [{}].[{}]", protocol, protocol);
+            }
+        }
     }
 
     private VertxOptions loadVertxOptions(JsonObject vertxConfig) {
-        JsonObject config = vertxConfig.getJsonObject("vertx.cluster", new JsonObject());
-        JsonObject zkConfig = new JsonObject();
-        zkConfig.put("zookeeperHosts", config.getString("zk.hosts"));
-        zkConfig.put("rootPath", config.getString("zk.root.path", "vertx/mesh"));
-        JsonObject defRetry = new JsonObject().put("initialSleepTime", 1000).put("maxTimes", 3);
-        zkConfig.put("retry", config.getJsonObject("zk.retry", defRetry));
-
-        ClusterManager clusterManager = new ZookeeperClusterManager(zkConfig);
-        VertxOptions vertxOptions = new VertxOptions().setClustered(true).setClusterManager(clusterManager);
-
-        int blockedThreadCheckInterval = vertxConfig.getInteger("vertx.blockedThreadCheckInterval", 0);
-        if (blockedThreadCheckInterval > 0) {
-            vertxOptions.setBlockedThreadCheckInterval(blockedThreadCheckInterval);
+        VertxOptions vertxOptions = new VertxOptions();
+        int blockedCheckInterval = vertxConfig.getInteger("vertx.blockedThreadCheckInterval", 0);
+        if (blockedCheckInterval > 0) {
+            vertxOptions.setBlockedThreadCheckInterval(blockedCheckInterval);
         }
+
+        JsonObject config = vertxConfig.getJsonObject("vertx.cluster");
+        if (config != null && config.getString("type") != null) {
+            ClusterManager clusterManager = null;
+
+            String type = config.getString("type");
+            if ("zookeeper".equalsIgnoreCase(type)) {
+                clusterManager = new ZookeeperClusterManager(config);
+            }
+
+            if (clusterManager != null) {
+                vertxOptions.setClustered(true).setClusterManager(clusterManager);
+            } else {
+                LOG.warn("unkown cluster type [{}]", type);
+            }
+        }
+
         return vertxOptions;
     }
 

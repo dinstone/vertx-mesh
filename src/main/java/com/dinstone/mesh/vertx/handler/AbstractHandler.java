@@ -23,8 +23,12 @@ public class AbstractHandler {
     }
 
     protected void failed(RoutingContext ctx, String message) {
+        failed(ctx, 503, message);
+    }
+
+    protected void failed(RoutingContext ctx, int statusCode, String message) {
         JsonObject res = new JsonObject().put("code", "-1").put("message", message);
-        ctx.response().setStatusCode(503).end(res.encode());
+        ctx.response().setStatusCode(statusCode).end(res.encode());
     }
 
     protected void failed(RoutingContext ctx, Throwable throwable) {

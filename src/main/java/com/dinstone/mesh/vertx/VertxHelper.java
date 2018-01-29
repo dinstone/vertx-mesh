@@ -67,19 +67,11 @@ public final class VertxHelper {
     public static boolean deployVerticle(Vertx vertx, DeploymentOptions deployOptions, VerticleFactory factory,
             String verticleName) throws Exception {
         vertx.registerVerticleFactory(factory);
-
-        CompletableFuture<Boolean> future = new CompletableFuture<>();
-        vertx.deployVerticle(verticleName, deployOptions, deployResponse -> {
-            if (deployResponse.succeeded()) {
-                LOG.info("verticle deployment is succeeded, {}:{}", verticleName, deployResponse.result());
-                future.complete(true);
-            } else {
-                LOG.error("verticle deployment is failed, {}:{}", verticleName, deployResponse.cause());
-                future.completeExceptionally(deployResponse.cause());
-            }
-        });
-
-        return future.get();
+        try {
+            return deployVerticle(vertx, deployOptions, verticleName);
+        } finally {
+            vertx.unregisterVerticleFactory(factory);
+        }
     }
 
     public static boolean deployVerticle(Vertx vertx, DeploymentOptions deployOptions, Verticle verticle)
